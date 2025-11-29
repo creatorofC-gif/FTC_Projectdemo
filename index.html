@@ -1,99 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name = "viewport" content="width=device-width,initial-scale=1.0">
-        <title>Stock Track Sim</title>
-        <link rel="stylesheet" href="styles.css">
-    </head>
 
-    <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fintech Stock Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .stock-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stock-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+
+        .stock-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .stock-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .stock-price {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .buy-btn {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .buy-btn:hover {
+            background: #5568d3;
+        }
+
+        .buy-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .portfolio-item {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+
+        .portfolio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .portfolio-header h3 {
+            color: #333;
+        }
+
+        .price-change {
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .price-change.positive {
+            color: #10b981;
+            background: #d1fae5;
+        }
+
+        .price-change.negative {
+            color: #ef4444;
+            background: #fee2e2;
+        }
+
+        .price-change.neutral {
+            color: #6b7280;
+            background: #f3f4f6;
+        }
+
+        .alerts-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-item.profit {
+            background: #d1fae5;
+            border-left-color: #10b981;
+        }
+
+        .alert-item.loss {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+
+        .alert-item.neutral {
+            background: #f9fafb;
+            border-left-color: #6b7280;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .alert-header h4 {
+            color: #333;
+        }
+
+        .alert-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #ef4444;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: #d1fae5;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-indicator.active {
+            background: #10b981;
+        }
+
+        .status-indicator.inactive {
+            background: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
     <div class="container">
         <div class="header">
-            <h1>Stock Sim</h1>
+            <h1>📈 Stock Sim</h1>
             <p>Track Indian Market Stocks with Real-Time Alerts</p>
-            <p><span class="status-indicator active" id="statusIndicator"></span><span id="statusText">Connecting...</span></p>
+            <p><span class="status-indicator active" id="statusIndicator"></span><span
+                    id="statusText">Connecting...</span></p>
         </div>
 
-        <!-- Stock List Section -->
+
         <div class="section">
-            <h2>Available Stocks (Indian Market - NSE)</h2>
+            <h2>📊 Available Stocks (Indian Market - NSE)</h2>
             <div id="stockList" class="stock-list">
                 <div class="loading">Loading stocks...</div>
             </div>
         </div>
 
-        <!-- Portfolio Section -->
+
         <div class="section">
-            <h2>My Portfolio</h2>
+            <h2>💼 My Portfolio</h2>
             <div id="portfolio">
                 <div class="loading">No stocks in portfolio yet. Buy stocks to start tracking!</div>
             </div>
         </div>
 
-        <!-- Alerts Section -->
+
         <div class="section">
-            <h2>Price Alerts (±5% Movement)</h2>
+            <h2>🚨 Price Alerts (±5% Movement)</h2>
             <div id="alerts" class="alerts-container">
-                <div class="loading">No alerts yet. Alerts will appear here when stocks move ±5% from purchase price.</div>
+                <div class="loading">No alerts yet. Alerts will appear here when stocks move ±5% from purchase price.
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Auto-detect the API base URL based on current page location
+
         let API_BASE;
-        
-        // Check if page is loaded via file:// protocol (local file)
+
+
         if (window.location.protocol === 'file:') {
-            // If opened as local file, redirect or show error
+
             document.body.innerHTML = `
                 <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif;">
                     <h1 style="color: #ef4444;">❌ Wrong Way to Open This Page!</h1>
-                    <div style="background: #fee2e2; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
-                        <h2>You opened the HTML file directly from your computer.</h2>
-                        <p><strong>This won't work!</strong> The page needs to be served by the web server.</p>
-                        <h3>✅ Correct Steps:</h3>
-                        <ol>
-                            <li><strong>Start the server first:</strong>
-                                <br><code style="background: #f0f0f0; padding: 5px 10px; border-radius: 5px; display: inline-block; margin-top: 5px;">python -m uvicorn main:app --reload</code>
-                            </li>
-                            <li><strong>Wait for the server to start</strong> (you'll see "Uvicorn running on http://127.0.0.1:8000")</li>
-                            <li><strong>Open your browser and go to:</strong>
-                                <br><a href="http://127.0.0.1:8000" style="color: #667eea; font-size: 1.2em; font-weight: bold;">http://127.0.0.1:8000</a>
-                            </li>
-                        </ol>
-                        <p style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ef4444;">
-                            <strong>Don't:</strong> Double-click index.html or open it as a file<br>
-                            <strong>Do:</strong> Access it through the web server URL
                         </p>
                     </div>
                 </div>
             `;
             throw new Error('Page opened as local file - must be accessed via server');
         } else {
-            // Use same origin as the page (handles localhost, 127.0.0.1, etc.)
+
             API_BASE = window.location.origin;
         }
-        
+
         let portfolioRefreshInterval;
         let alertsRefreshInterval;
         let stocksRefreshInterval;
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
+
+        document.addEventListener('DOMContentLoaded', function () {
             checkServerStatus();
             loadStocks();
             loadPortfolio();
             loadAlerts();
-            
-            // Auto-refresh with optimal timing (aligned with backend 5-second monitoring cycle)
+
+
             portfolioRefreshInterval = setInterval(loadPortfolio, 5000); // Every 5 seconds
             alertsRefreshInterval = setInterval(loadAlerts, 6000); // Every 6 seconds (slightly offset to avoid conflicts)
             stocksRefreshInterval = setInterval(loadStocks, 8000); // Every 8 seconds (less frequent for market data)
         });
 
-        // Check server status
+
         async function checkServerStatus() {
             try {
                 const response = await fetch(`${API_BASE}/status`);
@@ -107,24 +334,24 @@
             }
         }
 
-        // Load stocks list
+
         async function loadStocks() {
             try {
                 const response = await fetch(`${API_BASE}/stocks`);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                
+
                 const data = await response.json();
                 const stockListDiv = document.getElementById('stockList');
-                
+
                 if (data.market_data && data.market_data.length > 0) {
                     stockListDiv.innerHTML = data.market_data.map(stock => {
                         const price = stock.current_price;
                         const priceDisplay = price ? `₹${price.toFixed(2)}` : 'Loading...';
                         const hasError = stock.status === 'error';
-                        
+
                         return `
                             <div class="stock-card">
                                 <h3>${stock.symbol}</h3>
@@ -145,7 +372,7 @@
                 const stockListDiv = document.getElementById('stockList');
                 const errorMsg = error.message || 'Unknown error';
                 const isNetworkError = errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('fetch');
-                
+
                 stockListDiv.innerHTML = `
                     <div class="error">
                         <strong>❌ Error loading stocks:</strong> ${errorMsg}
@@ -184,7 +411,7 @@
             }
         }
 
-        // Buy stock
+
         async function buyStock(symbol) {
             try {
                 const buyButton = event.target;
@@ -221,14 +448,14 @@
             }
         }
 
-        // Load portfolio
+
         async function loadPortfolio() {
             try {
                 const response = await fetch(`${API_BASE}/portfolio`);
                 const data = await response.json();
-                
+
                 const portfolioDiv = document.getElementById('portfolio');
-                
+
                 if (data.active_positions > 0) {
                     portfolioDiv.innerHTML = Object.entries(data.portfolio)
                         .filter(([id, stock]) => stock.status === 'ACTIVE')
@@ -236,7 +463,7 @@
                             const percentChange = stock.percent_change || 0;
                             const changeClass = percentChange > 0 ? 'positive' : percentChange < 0 ? 'negative' : 'neutral';
                             const changeSymbol = percentChange > 0 ? '↑' : percentChange < 0 ? '↓' : '';
-                            
+
                             return `
                                 <div class="portfolio-item">
                                     <div class="portfolio-header">
@@ -260,19 +487,19 @@
             }
         }
 
-        // Load alerts
+
         async function loadAlerts() {
             try {
                 // Check portfolio first to see if we have active positions
                 const portfolioResponse = await fetch(`${API_BASE}/portfolio`);
                 const portfolioData = await portfolioResponse.json();
                 const hasActivePositions = portfolioData.active_positions > 0;
-                
+
                 const response = await fetch(`${API_BASE}/alerts`);
                 const data = await response.json();
-                
+
                 const alertsDiv = document.getElementById('alerts');
-                
+
                 if (data.total_alerts > 0) {
                     // Get all alerts sorted by time
                     let allAlerts = [];
@@ -281,14 +508,14 @@
                             allAlerts.push({ ...alert, transaction_id: txId });
                         });
                     });
-                    
+
                     allAlerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    
+
                     alertsDiv.innerHTML = allAlerts.map(alert => {
                         const alertClass = alert.type === 'PROFIT' ? 'profit' : 'loss';
                         const emoji = alert.type === 'PROFIT' ? '📈' : '📉';
                         const time = new Date(alert.timestamp).toLocaleString();
-                        
+
                         return `
                             <div class="alert-item ${alertClass}">
                                 <div class="alert-header">
@@ -323,19 +550,20 @@
             }
         }
 
-        // Show message
+
         function showMessage(message, type) {
             const messageDiv = document.createElement('div');
             messageDiv.className = type;
             messageDiv.textContent = message;
-            
+
             const header = document.querySelector('.header');
             header.insertAdjacentElement('afterend', messageDiv);
-            
+
             setTimeout(() => {
                 messageDiv.remove();
             }, 5000);
         }
     </script>
 </body>
+
 </html>

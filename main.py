@@ -12,36 +12,36 @@ import os
 
 app = FastAPI(title="Stock Tracking Simulator")
 
-#for frontend requests
+
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[""],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_header = ["*"],
+    allow_headers=["*"],
 )
 
-#using 4 prominent stocks for demo
-WATCHLIST = ["RELIANCE.NS","TCS.NS","INF,NS","HDFCBANK.NS"]
 
-#Real time monitoring 
-MONITORING_INTERVAL  = 5  #Checks for status every 5 seconds
+WATCHLIST = ["RELIANCE.NS","TCS.NS","INFY.NS","HDFCBANK.NS"]
 
-portfolio: Dict[int,dict]={} #storage
+ 
+MONITORING_INTERVAL  = 5
 
-alert_history: Dict[int,List[dict]]={}  #shows the alerts
+portfolio: Dict[int,dict]={}
 
-#helper fucntions
+alert_history: Dict[int,List[dict]]={}
+
+
 
 def get_live_price(symbol: str):
     """Fetches the specific live price from Yahoo Finance API (Indian Market)."""
     try:
         ticker = yf.Ticker(symbol)
         
-        # Try multiple methods to get the price
+
         try:
-            # Method 1: Try fast_info first
+
             info = ticker.fast_info
             if hasattr(info, 'last_price') and info.last_price is not None:
                 price = float(info.last_price)
@@ -51,7 +51,7 @@ def get_live_price(symbol: str):
             pass
         
         try:
-            # Method 2: Try getting info dictionary
+
             info_dict = ticker.info
             if 'currentPrice' in info_dict and info_dict['currentPrice']:
                 price = float(info_dict['currentPrice'])
@@ -65,7 +65,7 @@ def get_live_price(symbol: str):
             pass
         
         try:
-            # Method 3: Get last close price from history (most reliable)
+
             hist = ticker.history(period="1d", interval="1m")
             if not hist.empty and 'Close' in hist.columns:
                 price = float(hist['Close'].iloc[-1])
@@ -75,7 +75,7 @@ def get_live_price(symbol: str):
             pass
         
         try:
-            # Method 4: Try 1 day history with daily interval
+
             hist = ticker.history(period="1d")
             if not hist.empty and 'Close' in hist.columns:
                 price = float(hist['Close'].iloc[-1])
@@ -99,7 +99,7 @@ def monitor_market():
         return
 
     timestamp = datetime.now().strftime('%H:%M:%S')
-    # NOTE: This output appears in the SERVER CONSOLE where uvicorn is running
+
     print(f"\n[{timestamp}] 🔍 Real-time Market Scan...")
     
     for tx_id, data in portfolio.items():
@@ -109,7 +109,7 @@ def monitor_market():
         symbol = data['symbol']
         buy_price = data['buy_price']
         
-        # Check if there's a simulated current price (for testing), otherwise fetch real-time
+
         if 'simulated_current_price' in data:
             current_price = data['simulated_current_price']
             print(f"   [SIMULATED] Using simulated price: ₹{current_price}")
@@ -119,17 +119,17 @@ def monitor_market():
         if current_price is None:
             continue
             
-        # Calculate Percentage Change from purchase price
+
         percent_change = ((current_price - buy_price) / buy_price) * 100
         
-        # Update current price in portfolio for tracking
+
         data['current_price'] = current_price
         data['percent_change'] = round(percent_change, 2)
         
         log_msg = f"   📊 {symbol}: Buy @ ₹{buy_price} | Current @ ₹{current_price} | Change: {percent_change:+.2f}%"
         print(log_msg)
 
-        #  REAL-TIME ALERT LOGIC (5% threshold)
+
         alert_sent = data.get('alert_sent', False)
         alert_type = None
         
@@ -138,15 +138,22 @@ def monitor_market():
         elif percent_change <= -5.0:
             alert_type = "LOSS"
         
-        # Trigger alert only if threshold crossed AND alert not already sent for this movement
-        if alert_type and not alert_sent:
+        # Heartbeat Logic: Check if 60 seconds passed without significant change
+        current_ts = datetime.now().timestamp()
+        last_heartbeat = data.get('last_heartbeat', current_ts)
+        
+        if not alert_type and (current_ts - last_heartbeat >= 60):
+            alert_type = "NEUTRAL"
+            data['last_heartbeat'] = current_ts  # Reset heartbeat timer
+
+        if alert_type and (not alert_sent or alert_type == "NEUTRAL"):
             trigger_alert(tx_id, symbol, alert_type, percent_change, current_price, buy_price)
-            # Mark as alerted to prevent duplicates
-            data['alert_sent'] = True
-            data['alert_type'] = alert_type
-            data['alert_triggered_at'] = datetime.now().isoformat()
+
+            if alert_type != "NEUTRAL":
+                data['alert_sent'] = True
+                data['alert_type'] = alert_type
+                data['alert_triggered_at'] = datetime.now().isoformat()
             
-            # Store in alert history
             if tx_id not in alert_history:
                 alert_history[tx_id] = []
             alert_history[tx_id].append({
@@ -162,8 +169,8 @@ def trigger_alert(transaction_id: int, symbol: str, alert_type: str, percent: fl
     Triggers a real-time alert when stock moves ±5% from purchase price.
     This simulates a push notification/alert in a production system.
     """
-    direction_emoji = "📈" if alert_type == "PROFIT" else "📉"
-    direction_text = "GAIN" if alert_type == "PROFIT" else "LOSS"
+    direction_emoji = "📈" if alert_type == "PROFIT" else "📉" if alert_type == "LOSS" else "😐"
+    direction_text = "GAIN" if alert_type == "PROFIT" else "LOSS" if alert_type == "LOSS" else "STABLE"
     
     print("\n" + "="*60)
     print(f"🚨 REAL-TIME ALERT TRIGGERED! 🚨")
@@ -175,13 +182,13 @@ def trigger_alert(transaction_id: int, symbol: str, alert_type: str, percent: fl
     print(f"   Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60 + "\n")
 
-# Real-time monitoring scheduler - runs every 5 seconds for fast tracking
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(monitor_market, 'interval', seconds=MONITORING_INTERVAL, id='market_monitor')
 scheduler.start()
 print(f"✅ Real-time market monitoring started (checking every {MONITORING_INTERVAL} seconds)")
 
-# --- 4. API ENDPOINTS ---
+
 
 @app.get("/")
 def home():
@@ -198,6 +205,14 @@ def serve_ui():
     if os.path.exists(html_file):
         return FileResponse(html_file)
     raise HTTPException(status_code=404, detail="UI file not found")
+
+@app.get("/styles.css")
+def serve_styles():
+    """Serve the CSS file."""
+    css_file = os.path.join(os.path.dirname(__file__), "styles.css")
+    if os.path.exists(css_file):
+        return FileResponse(css_file, media_type="text/css")
+    raise HTTPException(status_code=404, detail="CSS file not found")
 
 @app.get("/stocks")
 def list_stocks():
@@ -253,7 +268,8 @@ def buy_stock(order: BuyRequest):
         "status": "ACTIVE",
         "alert_sent": False,  # Track if alert has been sent for this transaction
         "current_price": execution_price,
-        "percent_change": 0.0
+        "percent_change": 0.0,
+        "last_heartbeat": datetime.now().timestamp()
     }
 
     print(f"✅ Stock purchased: {symbol} at ₹{execution_price} (Transaction #{transaction_id})")
@@ -323,7 +339,7 @@ def reset_alert(transaction_id: int):
     
     return {"message": f"Alert reset for transaction #{transaction_id}. Monitoring will trigger new alerts."}
 
-# --- 5. SIMULATION HELPER (FOR TESTING ONLY) ---
+
 
 class SimulatePriceRequest(BaseModel):
     simulated_current_price: float
@@ -375,4 +391,8 @@ def system_status():
         "total_alerts_triggered": sum(len(alerts) for alerts in alert_history.values()),
         "monitoring_enabled": scheduler.running
     }
-                
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8081, reload=True)
