@@ -1,6 +1,6 @@
 ## How to run
 
-**have python installed
+have python installed
 
 ## Steps to run
 
