@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name = "viewport" content="width=device-width,initial-scale=1.0">
+        <title>Stock Track Sim</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+
+    <body>
+    <div class="container">
+        <div class="header">
+            <h1>Stock Sim</h1>
+            <p>Track Indian Market Stocks with Real-Time Alerts</p>
+            <p><span class="status-indicator active" id="statusIndicator"></span><span id="statusText">Connecting...</span></p>
+        </div>
+
+        <!-- Stock List Section -->
+        <div class="section">
+            <h2>Available Stocks (Indian Market - NSE)</h2>
+            <div id="stockList" class="stock-list">
+                <div class="loading">Loading stocks...</div>
+            </div>
+        </div>
+
+        <!-- Portfolio Section -->
+        <div class="section">
+            <h2>My Portfolio</h2>
+            <div id="portfolio">
+                <div class="loading">No stocks in portfolio yet. Buy stocks to start tracking!</div>
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="section">
+            <h2>Price Alerts (±5% Movement)</h2>
+            <div id="alerts" class="alerts-container">
+                <div class="loading">No alerts yet. Alerts will appear here when stocks move ±5% from purchase price.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-detect the API base URL based on current page location
+        let API_BASE;
+        
+        // Check if page is loaded via file:// protocol (local file)
+        if (window.location.protocol === 'file:') {
+            // If opened as local file, redirect or show error
+            document.body.innerHTML = `
+                <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif;">
+                    <h1 style="color: #ef4444;">❌ Wrong Way to Open This Page!</h1>
+                    <div style="background: #fee2e2; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
+                        <h2>You opened the HTML file directly from your computer.</h2>
+                        <p><strong>This won't work!</strong> The page needs to be served by the web server.</p>
+                        <h3>✅ Correct Steps:</h3>
+                        <ol>
+                            <li><strong>Start the server first:</strong>
+                                <br><code style="background: #f0f0f0; padding: 5px 10px; border-radius: 5px; display: inline-block; margin-top: 5px;">python -m uvicorn main:app --reload</code>
+                            </li>
+                            <li><strong>Wait for the server to start</strong> (you'll see "Uvicorn running on http://127.0.0.1:8000")</li>
+                            <li><strong>Open your browser and go to:</strong>
+                                <br><a href="http://127.0.0.1:8000" style="color: #667eea; font-size: 1.2em; font-weight: bold;">http://127.0.0.1:8000</a>
+                            </li>
+                        </ol>
+                        <p style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ef4444;">
+                            <strong>Don't:</strong> Double-click index.html or open it as a file<br>
+                            <strong>Do:</strong> Access it through the web server URL
+                        </p>
+                    </div>
+                </div>
+            `;
+            throw new Error('Page opened as local file - must be accessed via server');
+        } else {
+            // Use same origin as the page (handles localhost, 127.0.0.1, etc.)
+            API_BASE = window.location.origin;
+        }
+        
+        let portfolioRefreshInterval;
+        let alertsRefreshInterval;
+        let stocksRefreshInterval;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServerStatus();
+            loadStocks();
+            loadPortfolio();
+            loadAlerts();
+            
+            // Auto-refresh with optimal timing (aligned with backend 5-second monitoring cycle)
+            portfolioRefreshInterval = setInterval(loadPortfolio, 5000); // Every 5 seconds
+            alertsRefreshInterval = setInterval(loadAlerts, 6000); // Every 6 seconds (slightly offset to avoid conflicts)
+            stocksRefreshInterval = setInterval(loadStocks, 8000); // Every 8 seconds (less frequent for market data)
+        });
+
+        // Check server status
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                if (response.ok) {
+                    document.getElementById('statusIndicator').className = 'status-indicator active';
+                    document.getElementById('statusText').textContent = 'Connected - Monitoring Active';
+                }
+            } catch (error) {
+                document.getElementById('statusIndicator').className = 'status-indicator inactive';
+                document.getElementById('statusText').textContent = 'Disconnected - Start the server!';
+            }
+        }
+
+        // Load stocks list
+        async function loadStocks() {
+            try {
+                const response = await fetch(`${API_BASE}/stocks`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const stockListDiv = document.getElementById('stockList');
+                
+                if (data.market_data && data.market_data.length > 0) {
+                    stockListDiv.innerHTML = data.market_data.map(stock => {
+                        const price = stock.current_price;
+                        const priceDisplay = price ? `₹${price.toFixed(2)}` : 'Loading...';
+                        const hasError = stock.status === 'error';
+                        
+                        return `
+                            <div class="stock-card">
+                                <h3>${stock.symbol}</h3>
+                                <div class="stock-price">${priceDisplay}</div>
+                                ${hasError ? `<p style="color: #ef4444; font-size: 0.9em;">⚠️ ${stock.error || 'Error fetching price'}</p>` : ''}
+                                ${!price && !hasError ? '<p style="color: #999; font-size: 0.9em;">Fetching price... (Market may be closed)</p>' : ''}
+                                <button class="buy-btn" onclick="buyStock('${stock.symbol}')" ${!price || hasError ? 'disabled' : ''}>
+                                    ${price ? 'Buy Stock' : hasError ? 'Unavailable' : 'Loading...'}
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    stockListDiv.innerHTML = '<div class="error">Unable to load stocks. Please check if market is open or try refreshing the page.</div>';
+                }
+            } catch (error) {
+                console.error('Error loading stocks:', error);
+                const stockListDiv = document.getElementById('stockList');
+                const errorMsg = error.message || 'Unknown error';
+                const isNetworkError = errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('fetch');
+                
+                stockListDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error loading stocks:</strong> ${errorMsg}
+                        <br><br>
+                        ${isNetworkError ? `
+                            <strong>⚠️ Connection Failed - This usually means:</strong>
+                            <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
+                                <li><strong>Server is not running</strong><br>
+                                    Start the server first:<br>
+                                    <code style="background: #f0f0f0; padding: 2px 5px; border-radius: 3px;">python -m uvicorn main:app --reload</code>
+                                </li>
+                                <li><strong>Wrong URL</strong><br>
+                                    Make sure you're accessing: <code>http://127.0.0.1:8000/</code>
+                                </li>
+                                <li><strong>Server crashed</strong><br>
+                                    Check the server terminal for errors
+                                </li>
+                            </ul>
+                        ` : `
+                            <strong>Possible causes:</strong>
+                            <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
+                                <li>Server is not running</li>
+                                <li>No internet connection</li>
+                                <li>Market data API unavailable</li>
+                            </ul>
+                        `}
+                        <br>
+                        <strong>Try:</strong>
+                        <ol style="text-align: left; margin-top: 10px; padding-left: 20px;">
+                            <li>Check if server is running (you should see "Uvicorn running on http://127.0.0.1:8000" in terminal)</li>
+                            <li>Refresh this page (F5 or Ctrl+R)</li>
+                            <li>Check browser console (F12) for more details</li>
+                        </ol>
+                    </div>
+                `;
+            }
+        }
+
+        // Buy stock
+        async function buyStock(symbol) {
+            try {
+                const buyButton = event.target;
+                buyButton.disabled = true;
+                buyButton.textContent = 'Buying...';
+
+                const response = await fetch(`${API_BASE}/buy`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ symbol: symbol })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Successfully purchased ${symbol} at ₹${data.details.buy_price.toFixed(2)}!`, 'success');
+                    loadPortfolio();
+                    loadStocks();
+                } else {
+                    showMessage(data.detail || 'Error purchasing stock', 'error');
+                }
+            } catch (error) {
+                showMessage('Error connecting to server. Make sure it is running!', 'error');
+            } finally {
+                setTimeout(() => {
+                    const buttons = document.querySelectorAll('.buy-btn');
+                    buttons.forEach(btn => {
+                        btn.disabled = false;
+                        btn.textContent = 'Buy Stock';
+                    });
+                }, 1000);
+            }
+        }
+
+        // Load portfolio
+        async function loadPortfolio() {
+            try {
+                const response = await fetch(`${API_BASE}/portfolio`);
+                const data = await response.json();
+                
+                const portfolioDiv = document.getElementById('portfolio');
+                
+                if (data.active_positions > 0) {
+                    portfolioDiv.innerHTML = Object.entries(data.portfolio)
+                        .filter(([id, stock]) => stock.status === 'ACTIVE')
+                        .map(([id, stock]) => {
+                            const percentChange = stock.percent_change || 0;
+                            const changeClass = percentChange > 0 ? 'positive' : percentChange < 0 ? 'negative' : 'neutral';
+                            const changeSymbol = percentChange > 0 ? '↑' : percentChange < 0 ? '↓' : '';
+                            
+                            return `
+                                <div class="portfolio-item">
+                                    <div class="portfolio-header">
+                                        <h3>${stock.symbol}</h3>
+                                        <div class="price-change ${changeClass}">
+                                            ${changeSymbol} ${percentChange.toFixed(2)}%
+                                        </div>
+                                    </div>
+                                    <p>Purchase Price: ₹${stock.buy_price.toFixed(2)}</p>
+                                    <p>Current Price: ₹${stock.current_price ? stock.current_price.toFixed(2) : 'Loading...'}</p>
+                                    <p><small>Bought: ${new Date(stock.bought_at).toLocaleString()}</small></p>
+                                    ${stock.alert_sent ? '<p><strong>⚠️ Alert triggered</strong></p>' : ''}
+                                </div>
+                            `;
+                        }).join('');
+                } else {
+                    portfolioDiv.innerHTML = '<div class="loading">No stocks in portfolio yet. Buy stocks above to start tracking!</div>';
+                }
+            } catch (error) {
+                // Silently fail for portfolio refresh to avoid spam
+            }
+        }
+
+        // Load alerts
+        async function loadAlerts() {
+            try {
+                // Check portfolio first to see if we have active positions
+                const portfolioResponse = await fetch(`${API_BASE}/portfolio`);
+                const portfolioData = await portfolioResponse.json();
+                const hasActivePositions = portfolioData.active_positions > 0;
+                
+                const response = await fetch(`${API_BASE}/alerts`);
+                const data = await response.json();
+                
+                const alertsDiv = document.getElementById('alerts');
+                
+                if (data.total_alerts > 0) {
+                    // Get all alerts sorted by time
+                    let allAlerts = [];
+                    Object.entries(data.alert_history).forEach(([txId, alerts]) => {
+                        alerts.forEach(alert => {
+                            allAlerts.push({ ...alert, transaction_id: txId });
+                        });
+                    });
+                    
+                    allAlerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    alertsDiv.innerHTML = allAlerts.map(alert => {
+                        const alertClass = alert.type === 'PROFIT' ? 'profit' : 'loss';
+                        const emoji = alert.type === 'PROFIT' ? '📈' : '📉';
+                        const time = new Date(alert.timestamp).toLocaleString();
+                        
+                        return `
+                            <div class="alert-item ${alertClass}">
+                                <div class="alert-header">
+                                    <h4>${emoji} ${alert.type} Alert - Transaction #${alert.transaction_id}</h4>
+                                    <span class="alert-time">${time}</span>
+                                </div>
+                                <p><strong>Movement:</strong> ${alert.percent_change > 0 ? '+' : ''}${alert.percent_change.toFixed(2)}%</p>
+                                <p><strong>Purchase Price:</strong> ₹${alert.buy_price.toFixed(2)}</p>
+                                <p><strong>Current Price:</strong> ₹${alert.current_price.toFixed(2)}</p>
+                            </div>
+                        `;
+                    }).join('');
+                } else if (hasActivePositions) {
+                    // Show "no change" message when we have positions but no alerts
+                    const timestamp = new Date().toLocaleTimeString();
+                    alertsDiv.innerHTML = `
+                        <div class="alert-item neutral">
+                            <div class="alert-header">
+                                <h4>📊 No Significant Changes Detected</h4>
+                                <span class="alert-time">Last checked: ${timestamp}</span>
+                            </div>
+                            <p>All tracked stocks are within normal price range (±5% threshold).</p>
+                            <p><strong>Status:</strong> Monitoring active - Alerts will appear here automatically when price moves ±5%.</p>
+                            <p><small>Stocks are being tracked in real-time every 5 seconds.</small></p>
+                        </div>
+                    `;
+                } else {
+                    alertsDiv.innerHTML = '<div class="loading">No alerts yet. Buy stocks above to start tracking and receive alerts when prices move ±5%.</div>';
+                }
+            } catch (error) {
+                // Silently fail for alerts refresh to avoid console spam
+            }
+        }
+
+        // Show message
+        function showMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            
+            const header = document.querySelector('.header');
+            header.insertAdjacentElement('afterend', messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
